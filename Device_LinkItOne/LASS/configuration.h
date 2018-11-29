@@ -25,7 +25,7 @@ char blynk_auth[] = "yourBlynkID"; // REPLACE: your Blynk auto id
 
 //Step 4:GPS
 //Do you want to use gps? 0:YES 1:FAKE GPS
-#define FAKE_GPS 0 // FAKE_GPS : 0: default format with gps, 1: default format but gps is fix data, need to update GPS_FIX_INFOR 
+#define FAKE_GPS 1 // FAKE_GPS : 0: default format with gps, 1: default format but gps is fix data, need to update GPS_FIX_INFOR 
 //NOTICE:If you choose 1 modify "FAKE" GPS location. Fill info below
 const char gps_lat[]= "23.000000";  // device's gps latitude
 const char gps_lon[]= "120.000000";   // device's gps longitude
@@ -72,10 +72,16 @@ enum pinConfig{
 
 //LASS's OPEN PM2.5 Field-TRY
 #if APP_ID==(APPTYPE_SYSTEM_BASE+1)
-  #define USE_PM25_G3
+  // define PM2.5 sensor:
+  #define USE_PM25_G1
+  //#define USE_PM25_G3
   //#define USE_PM25_A4
-  #define USE_DHT22  // not recommend for DHT series sensors
+
+  // define temp/humi sensor:
+  #define USE_DHT11 
+  //#define USE_DHT22  // not recommend for DHT series sensors
   //#define USE_SHT31
+
   //#define USE_LCD  // use 1602 i2c LCD...
   #define SENSOR_ID_DUST 10
   #define SENSOR_ID_TEMPERATURE 11
@@ -213,9 +219,3 @@ enum pinConfig{
 #define LED_STATE_OFF 0
 #define LED_STATE_READY 1
 #define LED_STATE_ERROR 2
-
-
-
-
-
-

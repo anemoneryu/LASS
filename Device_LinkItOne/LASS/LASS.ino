@@ -167,13 +167,20 @@ int period_target[2][3]= // First index is POLICY, [Sensing period],[Upload peri
   LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
  #endif
 
-  
+  #ifdef USE_DHT11
+    #include <DHT_linkit.h>     // Reference: https://github.com/Seeed-Studio/Grove_Starter_Kit_For_LinkIt/tree/master/libraries/Humidity_Temperature_Sensor 
+    #define DHTPIN 2
+    #define DHTTYPE DHT11   
+    DHT_linkit dht(DHTPIN, DHTTYPE);
+  #endif 
+
   #ifdef USE_DHT22
     #include <DHT_linkit.h>     // Reference: https://github.com/Seeed-Studio/Grove_Starter_Kit_For_LinkIt/tree/master/libraries/Humidity_Temperature_Sensor 
     #define DHTPIN 2
     #define DHTTYPE DHT22   // DHT 22  (AM2302)
     DHT_linkit dht(DHTPIN, DHTTYPE);
   #endif
+  
   #if APP_ID==(APPTYPE_PUBLIC_BASE+12)
     #define APP_NAME "Air-1" // REPLACE: this is your unique application name 
   
@@ -386,6 +393,11 @@ float ii; //illumination intensity
 int sensor_setup(){
   // Sensor
 #if (APP_ID == (APPTYPE_SYSTEM_BASE+1) || APP_ID==(APPTYPE_PUBLIC_BASE+12))
+
+#ifdef USE_DHT11 
+  dht.begin();  // DHT11
+#endif
+
 #ifdef USE_DHT22
   dht.begin();  // DHT22
 #endif
@@ -642,7 +654,57 @@ float get_sensor_data_humidity() {
 String msg_sensor;
 unsigned long timecount;
 
-#ifdef USE_PM25_G3
+#ifdef USE_PM25_G1  //PMS1003 G1
+int pm25sensorG1(){
+  unsigned long timeout = millis();
+  int count=0;
+  byte incomeByte[32];
+  boolean startcount=false;
+  byte data;
+  Serial1.begin(9600);
+  while (1){
+    if((millis() -timeout) > 3000) {    
+      Serial.println("[G1-ERROR-TIMEOUT]");
+      //#TODO:make device fail alarm message here
+      break;
+    }
+    if(Serial1.available()){
+      data=Serial1.read();
+    if(data==0x42 && !startcount){
+      startcount = true;
+      count++;
+      incomeByte[0]=data;
+    }else if(startcount){
+      count++;
+      incomeByte[count-1]=data;
+      if(count>=32) {break;}
+     }
+    }
+  }
+  Serial1.end();
+  Serial1.flush();
+  unsigned int calcsum = 0; // BM
+  unsigned int exptsum;
+  for(int i = 0; i < 30; i++) {
+    calcsum += (unsigned int)incomeByte[i];
+  }
+  
+  exptsum = ((unsigned int)incomeByte[30] << 8) + (unsigned int)incomeByte[31];
+  if(calcsum == exptsum) {
+    count = ((unsigned int)incomeByte[12] << 8) + (unsigned int)incomeByte[13];
+
+    //PM10
+    sensorValue[SENSOR_ID_DUST10] = ((unsigned int)incomeByte[14] << 8) + (unsigned int)incomeByte[15];
+    
+    return count;
+  } else {
+    Serial.println("#[exception] PM2.5 Sensor CHECKSUM ERROR!");
+    return -1;
+  }     
+}
+#endif
+
+#ifdef USE_PM25_G3  //PMS3003 G3
 int pm25sensorG3(){
   unsigned long timeout = millis();
   int count=0;
@@ -930,6 +992,11 @@ int get_sensor_data(){
       Serial.println(timecount);
       timecount=millis();
       //Debug Time Count
+  #ifdef USE_PM25_G1
+      sensorValue[SENSOR_ID_DUST] = (float)pm25sensorG1();
+      Serial.print("[SENSOR-DUST-PM2.5]:");
+      Serial.println(sensorValue[SENSOR_ID_DUST]);
+  #endif
   #ifdef USE_PM25_G3
       sensorValue[SENSOR_ID_DUST] = (float)pm25sensorG3();
       Serial.print("[SENSOR-DUST-PM2.5]:");
@@ -943,6 +1010,14 @@ int get_sensor_data(){
       //in-code assign value
       Serial.print("[SENSOR-DUST-PM10]:");
       Serial.println(sensorValue[SENSOR_ID_DUST10]);
+  #ifdef USE_DHT11  
+      ThreadComplete=false;
+      LTask.remoteCall(createThread, NULL);
+      delay(200);
+      while(!ThreadComplete){
+        delay(1000);
+      };     
+  #endif
   #ifdef USE_DHT22  
       ThreadComplete=false;
       LTask.remoteCall(createThread, NULL);
@@ -1081,7 +1156,25 @@ int get_sensor_data(){
   }
 }
 
-
+#ifdef USE_DHT11
+boolean createThread(void* userdata) { 
+  // The priority can be 1 - 255 and default priority are 0 
+  // the arduino priority are 245 
+  vm_thread_create(dht_thread, NULL, 255); 
+  return true; 
+} 
+// This is the thread it self 
+VMINT32 dht_thread(VM_THREAD_HANDLE thread_handle, void* user_data) 
+{ 
+      dht.readHT(&t, &h);
+      while (isnan(t) || isnan(h) || t<0 || t>80 || h<0 || h > 100){
+        Serial.println("Something wrong with DHT => retry it!");
+        delay(100);
+        dht.readHT(&t, &h);   
+      }
+      ThreadComplete=true;
+}
+#endif
 #ifdef USE_DHT22
 boolean createThread(void* userdata) { 
   // The priority can be 1 - 255 and default priority are 0 
@@ -1100,6 +1193,7 @@ VMINT32 dht_thread(VM_THREAD_HANDLE thread_handle, void* user_data)
       }
       ThreadComplete=true;
 }
+
 #endif
 
 #if BLYNK_ENABLE == 1
@@ -1808,7 +1902,7 @@ void  retrieveNtpTime(){
   // Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
   const unsigned long seventyYears = 2208988800UL;
   // subtract seventy years:
-  epochSystem = secsSince1900 - seventyYears;
+  epochSystem = secsSince1900 - seventyYears + 86400;
   // print Unix time:
   Serial.println(epochSystem);
   
@@ -2865,4 +2959,3 @@ void loop() {
 #endif
   record_id++;
 }
-
