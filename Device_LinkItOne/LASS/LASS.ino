@@ -236,7 +236,7 @@ int current_power_policy=0;
 unsigned long currentTime = 0;  // current loop time
 unsigned long LastPostTime = 0; // last upload time
 unsigned long lastWifiReadyTime = 0; // last wifi ready time | the time be checked
-
+unsigned long setupEndtime = 0;   // setup completes the required time
 
 
 
@@ -654,7 +654,7 @@ float get_sensor_data_humidity() {
 String msg_sensor;
 unsigned long timecount;
 
-#ifdef USE_PM25_G1  //PMS1003 G1
+#if (defined USE_PM25_G1 || defined  USE_PM25_G5 || defined  USE_PM25_G5T ) // PMS1003 G1 ||  PMS5003 G5 ||  PMS5003T G5T
 int pm25sensorG1(){
   unsigned long timeout = millis();
   int count=0;
@@ -696,6 +696,12 @@ int pm25sensorG1(){
     //PM10
     sensorValue[SENSOR_ID_DUST10] = ((unsigned int)incomeByte[14] << 8) + (unsigned int)incomeByte[15];
     
+    #ifdef  USE_PM25_G5T
+      //Temp&Humi 
+      t = (((unsigned int)incomeByte[24] << 8) + (unsigned int)incomeByte[25]) * 0.1;
+      h = (((unsigned int)incomeByte[26] << 8) + (unsigned int)incomeByte[27]) * 0.1;
+    #endif
+
     return count;
   } else {
     Serial.println("#[exception] PM2.5 Sensor CHECKSUM ERROR!");
@@ -992,7 +998,7 @@ int get_sensor_data(){
       Serial.println(timecount);
       timecount=millis();
       //Debug Time Count
-  #ifdef USE_PM25_G1
+  #if (defined  USE_PM25_G1 ||  defined USE_PM25_G5 || defined USE_PM25_G5T)
       sensorValue[SENSOR_ID_DUST] = (float)pm25sensorG1();
       Serial.print("[SENSOR-DUST-PM2.5]:");
       Serial.println(sensorValue[SENSOR_ID_DUST]);
@@ -1430,7 +1436,7 @@ void packInfo(int infoType){
         strcpy(str_GPS_quality,"1");
         strcpy(str_GPS_satellite,"9");
         
-        unsigned long epoch = epochSystem + millis() / 1000;
+        unsigned long epoch = epochSystem + (millis() - setupEndtime)/ 1000;
         int year, month, day, hour, minute, second;
         getCurrentTime(epoch, &year, &month, &day, &hour, &minute, &second);
         sprintf(datestr,"%02d-%02d-%02d",year,month,day);  // use the UTC format for datestr
@@ -2777,7 +2783,7 @@ void setup() {
     Serial.println("NTP time retrieved...");
     Udp.stop();
   }
-  
+  setupEndtime = millis();
   delay(3000);
   Serial.println("Setup complete! Looping main program");
   

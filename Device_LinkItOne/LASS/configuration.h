@@ -76,6 +76,8 @@ enum pinConfig{
   #define USE_PM25_G1
   //#define USE_PM25_G3
   //#define USE_PM25_A4
+  //#define USE_PM25_G5
+  //#define USE_PM25_G5T
 
   // define temp/humi sensor:
   #define USE_DHT11 
@@ -219,3 +221,4 @@ enum pinConfig{
 #define LED_STATE_OFF 0
 #define LED_STATE_READY 1
 #define LED_STATE_ERROR 2
+
